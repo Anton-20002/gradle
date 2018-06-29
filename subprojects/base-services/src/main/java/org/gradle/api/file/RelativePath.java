@@ -15,6 +15,7 @@
  */
 package org.gradle.api.file;
 
+import com.google.common.collect.Iterators;
 import org.apache.commons.lang.StringUtils;
 import org.gradle.api.internal.cache.StringInterner;
 
@@ -82,7 +83,7 @@ public class RelativePath implements Serializable, Comparable<RelativePath>, Cha
     private static String internPathSegment(String sample) {
         // Intern all String instances added to RelativePath instances to minimize memory use
         // by de-duplicating all path segment String instances
-        return PATH_SEGMENT_STRING_INTERNER.intern(sample);
+        return sample;
     }
 
     public String[] getSegments() {
@@ -305,6 +306,6 @@ public class RelativePath implements Serializable, Comparable<RelativePath>, Cha
 
     @Override
     public Iterator<String> iterator() {
-        return segmentIterator();
+        return Iterators.forArray(segments);
     }
 }
