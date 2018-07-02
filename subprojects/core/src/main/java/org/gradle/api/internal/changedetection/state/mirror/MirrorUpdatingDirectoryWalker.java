@@ -69,10 +69,7 @@ public class MirrorUpdatingDirectoryWalker {
     }
 
     public PhysicalSnapshot walk(final PhysicalSnapshot fileSnapshot, @Nullable PatternSet patterns) {
-        if (fileSnapshot.getType() == FileType.Missing) {
-            return PhysicalMissingSnapshot.INSTANCE;
-        }
-        if (fileSnapshot.getType() == FileType.RegularFile) {
+        if (fileSnapshot.getType() != FileType.Directory) {
             return fileSnapshot;
         }
         Path rootPath = Paths.get(fileSnapshot.getPath());
