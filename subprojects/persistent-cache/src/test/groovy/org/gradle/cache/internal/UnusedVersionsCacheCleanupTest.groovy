@@ -16,7 +16,10 @@
 
 package org.gradle.cache.internal
 
+import org.gradle.cache.CleanableStore
+import org.gradle.internal.time.CountdownTimer
 import org.gradle.test.fixtures.file.CleanupTestDirectory
+import org.gradle.test.fixtures.file.TestFile
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.gradle.util.GradleVersion
 import org.junit.Rule
@@ -24,34 +27,40 @@ import spock.lang.Specification
 import spock.lang.Unroll
 
 @CleanupTestDirectory
-class SharedVersionedCacheCleanupTest extends Specification {
+class UnusedVersionsCacheCleanupTest extends Specification {
 
-    public static final String CACHE_NAME = "cache"
+    static final String CACHE_NAME = "cache"
+
     @Rule TestNameTestDirectoryProvider temporaryFolder = new TestNameTestDirectoryProvider()
 
-    def baseDir = temporaryFolder.getTestDirectory()
     def gradleVersionProvider = Stub(GradleVersionProvider)
 
     @Unroll
     def "deletes unused cache directories for mapping #mapping, Gradle versions #gradleVersions and existing cache versions #existingCacheVersions"() {
         given:
         existingCacheVersions.each { version ->
-            baseDir
-                .createDir("$CACHE_NAME-$version")
+            versionDir(version)
+                .createDir()
                 .createFile("test.txt").text = "foo"
+        }
+        def cacheVersionMapping = toCacheVersionMapping(mapping)
+        def cleanableStore = Stub(CleanableStore) {
+            getBaseDir() >> versionDir(cacheVersionMapping.latestVersion)
+            getReservedCacheFiles() >> []
+            getDisplayName() >> CACHE_NAME
         }
 
         when:
-        def sharedVersionedCacheCleanup = new SharedVersionedCacheCleanup(baseDir, CACHE_NAME, toCacheVersionMapping(mapping), gradleVersionProvider)
-        sharedVersionedCacheCleanup.deleteUnusedCacheDirectories()
+        UnusedVersionsCacheCleanup.create(CACHE_NAME, cacheVersionMapping, gradleVersionProvider)
+            .clean(cleanableStore, Stub(CountdownTimer))
 
         then:
         gradleVersionProvider.getRecentlyUsedVersions() >> (gradleVersions.collect { GradleVersion.version(it) } as SortedSet)
         for (version in (existingCacheVersions - expectedDeletedVersions)) {
-            baseDir.file("$CACHE_NAME-$version").assertExists()
+            versionDir(version).assertExists()
         }
         for (version in expectedDeletedVersions) {
-            baseDir.file("$CACHE_NAME-$version").assertDoesNotExist()
+            versionDir(version).assertDoesNotExist()
         }
 
         where:
@@ -61,13 +70,16 @@ class SharedVersionedCacheCleanupTest extends Specification {
         [[1, "4.1"], [2, "4.3"], [5, "4.8"]] | []                    | [1, 2, 5, 6]          || [1, 2]
     }
 
-    private CacheVersionMapping toCacheVersionMapping(List<List<?>> mapping) {
+    TestFile versionDir(int version) {
+        temporaryFolder.file("$CACHE_NAME-$version")
+    }
+
+    CacheVersionMapping toCacheVersionMapping(List<List<?>> mapping) {
         assert mapping[0][0] == 1
         def builder = CacheVersionMapping.introducedIn(mapping[0][1])
         mapping.tail().each {
             builder.changedTo(it[0], it[1])
         }
-        def cacheVersionMapping = builder.build()
-        cacheVersionMapping
+        return builder.build()
     }
 }
